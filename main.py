@@ -40,7 +40,9 @@ builder.add_edge("optimize", "improve")
 graph = builder.compile()
 
 # Run
-result = graph.invoke(input_data)
+# result = graph.invoke(input_data)
+
+result = graph.invoke({"prompt": "your prompt here", "attempt": 1})
 
 # Final Output
 print("\n🎯 FINAL APPROVED PROMPT:\n")

@@ -1,89 +1,56 @@
-"""
 from langgraph.graph import StateGraph, END
 from state import AgentState
 
+# ✅ Import all nodes correctly
 from nodes.run_agent import run_agent
-from nodes.evaluate import evaluate
-from nodes.optimize import optimize
-from nodes.human_review import human_review
+from nodes.evaluate import evaluate_prompt as evaluate
+from nodes.optimize import optimize_prompt as optimize
+from nodes.check_quality import check_quality
 
 
-def human_decision_router(state):
-    if state["human_decision"] == "accept":
-        return "end"
-
-    if state.get("attempt", 0) >= 3:
-        print("\n⚠️ Max attempts reached. Ending.")
-        return "end"
-
-    return "run"
-
-
-"""
-
-
+# ----------------------------------------
+# Decision Function
+# ----------------------------------------
 def decide(state):
     total_score = state["relevance"] + state["specificity"] + state["clarity"]
-    attempt = state["attempt"]
+    attempt = state.get("attempt", 0)
+
     print(f"\n⭐ Total Score: {total_score}")
 
-    if total_score >= 24:
+    # ✅ If good score → stop
+    if total_score >= 27:
         print("\n✅ Good output. Stopping.")
         return END
 
-    if state["attempt"] >= 2:
+    # ✅ If max attempts reached → stop
+    # if attempt >= 2:
+    if attempt >= 3:
         print("\n⚠️ Max attempts reached.")
         return END
 
+    # Otherwise → optimize again
     return "optimize"
 
 
-"""
-
+# ----------------------------------------
+# Build Graph
+# ----------------------------------------
 builder = StateGraph(AgentState)
 
+# ✅ Add nodes
 builder.add_node("run", run_agent)
 builder.add_node("evaluate", evaluate)
 builder.add_node("optimize", optimize)
-builder.add_node("human_review", human_review)
 
-
-def update_prompt(state):
-    state["prompt"] = state["approved_prompt"]  # 🔥 THIS LINE
-    return state
-
-
-builder.add_node("update_prompt", update_prompt)
-
+# ✅ Entry point
 builder.set_entry_point("run")
 
+# ✅ Flow
 builder.add_edge("run", "evaluate")
-builder.add_edge("evaluate", "optimize")
-builder.add_edge("optimize", "human_review")
-builder.add_conditional_edges(
-    "human_review", human_decision_router, {"run": "run", "end": END}
-)
 
-graph = builder.compile()
+builder.add_conditional_edges("evaluate", decide, {"optimize": "optimize", END: END})
 
-"""
+builder.add_edge("optimize", "run")
 
-from langgraph.graph import StateGraph
-
-builder = StateGraph(dict)
-
-builder.add_node("improve", run_agent)
-builder.add_node("evaluate", evaluate_prompt)
-builder.add_node("optimize", optimize)
-
-builder.set_entry_point("improve")
-
-builder.add_edge("improve", "evaluate")
-
-builder.add_conditional_edges(
-    "evaluate", check_quality, {"improve": "optimize", "end": "__end__"}
-)
-
-builder.add_edge("optimize", "improve")
-
+# ✅ Compile graph
 graph = builder.compile()

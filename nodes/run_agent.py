@@ -8,8 +8,8 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
 
 def run_agent(state):
     original_prompt = state["prompt"]
-
-    print(f"\n🔹 Improving Prompt (Attempt {state['attempt']})...\n")
+    attempt = state.get("attempt", 0) + 1
+    print(f"\n🔹 Improving Prompt (Attempt {'attempt'})...\n")
 
     improvement_instruction = f"""
 You are an expert Prompt Engineer.
@@ -41,4 +41,8 @@ PROMPT TO IMPROVE:
 
     print("✅ Improved Prompt Generated\n")
 
-    return {"improved_prompt": improved_prompt, "attempt": state["attempt"] + 1}
+    return {
+        **state,
+        "improved_prompt": improved_prompt,
+        "attempt": attempt,
+    }

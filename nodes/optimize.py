@@ -3,32 +3,52 @@ from langchain_openai import ChatOpenAI
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
 
 
-def optimize(state):
-    print("\n🔁 Generating multiple improved prompts...\n")
+# def optimize_prompt(state):
+#   print("\n🔁 Generating multiple improved prompts...\n")
 
-    # ✅ Always safely get attempt
-    attempt = state.get("attempt", 0)
+# ✅ Always safely get attempt
+#  attempt = state.get("attempt", 0)
 
-    print("Attempt:", attempt)
+# print("Attempt:", attempt)
 
-    feedback = state.get("feedback", "")
-    prompt = state.get("prompt", "")
+# feedback = state.get("feedback", "")
+# improved_prompt = state.get("improved_prompt", "")
 
-    # 🔹 Simple prompt improvement logic (can upgrade later)
-    candidate_prompts = [
-        f"Improve the following prompt for clarity and specificity:\n\n{prompt}",
-        f"Rewrite this prompt to make it more structured and detailed:\n\n{prompt}",
-        f"Enhance this prompt by making it more actionable and precise:\n\n{prompt}",
-    ]
 
-    print("\n🆕 Candidate Prompts:")
+# 🔹 Simple prompt improvement logic (can upgrade later)
+def optimize_prompt(state):
+    prompt = state["prompt"]
+    feedback = state["feedback"]
 
-    for i, p in enumerate(candidate_prompts, 1):
-        print(f"{i}. {p}\n")
+    improved_prompt = f"""
+You are a prompt engineering expert. 
+Rewrite the following prompt to significantly improve its relevance, specificity, and clarity.
+
+DO NOT return the same prompt.
+You MUST expand it into a detailed, structured version.
+
+Original Prompt:
+{prompt}
+
+Feedback:
+{feedback}
+
+RULES:
+- Make it more specific and detailed
+- Add structured formatting (steps, constraints,output format if needed)
+- DO NO keep it generic
+- DO NOT return the same prompt
+- Make it clearly better than original
+
+Return only the improved prompt.
+"""
+
+    # Call your LLM here (example)
+    response = llm.invoke(improved_prompt)
 
     return {
-        # "candidate_prompts": candidate_prompts,
-        # "attempt": attempt + 1,  # ✅ SAFE increment
-        "prompt": state["improved_prompt"],  # 🔥 THIS LIN
-        "attempt": attempt,
+        **state,
+        "prompt": response.content.strip(),
+        "improved_prompt": response.content.strip(),
+        "attempt": state.get("attempt", 0) + 1,
     }
