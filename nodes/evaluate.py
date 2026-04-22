@@ -4,7 +4,7 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 
 def evaluate_prompt(state):
-    prompt = state["improved_prompt"]
+    prompt = state["prompt"]
 
     print("\n📊 Evaluating Prompt...\n")
 
@@ -46,9 +46,9 @@ Feedback: ...
     print(text)
 
     return {
+        **state,
         "relevance": relevance,
         "specificity": specificity,
         "clarity": clarity,
         "feedback": text,
-        "improved_prompt": state["improved_prompt"],
     }
