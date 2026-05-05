@@ -4,8 +4,8 @@ from state import AgentState
 # ✅ Import all nodes correctly
 from nodes.run_agent import run_agent
 from nodes.evaluate import evaluate_prompt as evaluate
-from nodes.optimize import optimize_prompt as optimize
-from nodes.check_quality import check_quality
+from nodes import optimize
+from nodes import check_quality
 
 
 # ----------------------------------------
@@ -40,7 +40,7 @@ builder = StateGraph(AgentState)
 # ✅ Add nodes
 builder.add_node("run", run_agent)
 builder.add_node("evaluate", evaluate)
-builder.add_node("optimize", optimize)
+builder.add_node("optimize", optimize.optimize_prompt)
 
 # ✅ Entry point
 builder.set_entry_point("run")

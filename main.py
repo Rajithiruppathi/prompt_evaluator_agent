@@ -1,49 +1,26 @@
-from langgraph.graph import StateGraph
+from generator import generate_content
 
-from nodes.run_agent import run_agent
-from nodes.evaluate import evaluate_prompt
-from nodes.optimize import optimize
-from nodes.check_quality import check_quality
 
-# Read prompt from file
-with open("prompt.txt", "r", encoding="utf-8") as f:
-    user_prompt = f.read()
+def run():
+    print("🚀 AI Content Engine\n")
 
-# Initial state
-input_data = {
-    "prompt": user_prompt,
-    "improved_prompt": "",
-    "relevance": 0,
-    "specificity": 0,
-    "clarity": 0,
-    "feedback": "",
-    "attempt": 0,
-}
+    prompt = input("Enter your prompt: ").strip()
+    use_case = input("Use Case (LinkedIn Post / Cold Email / Blog): ").strip()
+    audience = input("Target Audience: ").strip()
+    tone = input("Tone: ").strip()
+    goal = input("Goal: ").strip()
 
-# Build graph
-builder = StateGraph(dict)
+    print("\n⏳ Generating...\n")
 
-builder.add_node("improve", run_agent)
-builder.add_node("evaluate", evaluate_prompt)
-builder.add_node("optimize", optimize)
+    try:
+        result = generate_content(prompt, use_case, audience, tone, goal)
 
-builder.set_entry_point("improve")
+        print("\n🎯 FINAL OUTPUT:\n")
+        print(result)
 
-builder.add_edge("improve", "evaluate")
+    except Exception as e:
+        print(f"\n❌ Error: {e}")
 
-builder.add_conditional_edges(
-    "evaluate", check_quality, {"improve": "optimize", "end": "__end__"}
-)
 
-builder.add_edge("optimize", "improve")
-
-graph = builder.compile()
-
-# Run
-# result = graph.invoke(input_data)
-
-result = graph.invoke({"prompt": "your prompt here", "attempt": 1})
-
-# Final Output
-print("\n🎯 FINAL APPROVED PROMPT:\n")
-print(result["improved_prompt"])
+if __name__ == "__main__":
+    run()
