@@ -1,9 +1,8 @@
 def check_quality(state):
-    score = (state["relevance"] + state["specificity"] + state["clarity"]) / 3
+    avg = (state["relevance"] + state["specificity"] + state["clarity"]) / 3
+    attempt = state.get("attempt", 0)
 
-    print(f"\n🎯 Avg Score: {score}")
-
-    if score >= 8 or state["attempt"] >= 3:
+    if avg >= 7 and attempt < 2:
         return "end"
-    else:
-        return "improve"
+
+    return "improve"
