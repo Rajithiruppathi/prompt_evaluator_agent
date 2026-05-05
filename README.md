@@ -1,285 +1,155 @@
-# Prompt Evaluator & Optimizer Agent 🚀
+# 🚀 AI Content Engine (Prompt Optimizer Agent)
 
-## 📌 Overview
-
-This project is an AI-powered **Prompt Optimization Pipeline** built using Python and LangChain.
-
-It is designed to:
-
-* Improve raw prompts
-* Evaluate their quality
-* Iteratively refine them
-* Produce a final, high-quality prompt
-
-Instead of manually rewriting prompts, this system automates the process using structured AI workflows.
+An intelligent AI system that transforms a simple idea into high-quality content tailored for different use cases like LinkedIn posts, blogs, and cold emails.
 
 ---
 
-## 🎯 Problem Statement
+## 💡 Problem
 
-Writing prompts is easy.
-But writing **high-quality prompts** that are:
+Most users give vague prompts like:
 
-* Clear
-* Specific
-* Structured
-* Effective
+> "Write about APIs"
 
-is difficult and inconsistent.
-
-Most developers:
-
-* Rewrite prompts manually
-* Don’t evaluate quality
-* Lack a feedback loop
+This leads to:
+- Generic outputs
+- No audience targeting
+- No structure
+- Poor engagement
 
 ---
 
-## 💡 Solution
+## ✅ Solution
 
-This project introduces a **multi-node pipeline** that:
+This AI Content Engine:
+- Understands **use case**
+- Adapts to **audience**
+- Aligns with **tone**
+- Optimizes for **goal**
 
-1. Improves prompts using an LLM
-2. Evaluates them using scoring metrics
-3. Decides whether to iterate or stop
-4. Outputs a refined version
-
----
-
-## ⚙️ How the System Works
-
-### 🔁 Pipeline Flow
-
-User Input / prompt.txt
-↓
-run_agent.py (LLM improves prompt)
-↓
-evaluate.py (scores prompt)
-↓
-check_quality.py (decides if good enough)
-↓
-optimize.py (retries if needed)
-↓
-human_review.py (optional approval)
-↓
-FINAL OUTPUT
+👉 Converts one simple input into **high-quality, structured content**
 
 ---
 
-## 🧩 Project Structure
+## 🧠 How It Works
 
-```
-v2_ai_evaluator/
-│
-├── main.py                # Entry point
-├── app_graph.py           # LangGraph pipeline definition
-├── state.py               # Shared state across nodes
-│
-├── prompt.txt             # Input prompt
-├── requirements.txt       # Dependencies
-├── README.md              # Documentation
-│
-├── nodes/
-│   ├── run_agent.py       # Prompt improvement (LLM call)
-│   ├── evaluate.py        # Scoring logic
-│   ├── check_quality.py   # Quality threshold decision
-│   ├── optimize.py        # Iteration logic
-│   ├── human_review.py    # Manual approval (optional)
-│   ├── ask_user.py        # User input handling (optional)
-```
+### Flow:
+
+
+User Input → Prompt Optimization → Evaluation → Final Output
+
 
 ---
 
-## 🧠 Node-Level Explanation
+## 📂 Project Structure
 
-### 1. run_agent.py
-
-**Role:** Improves the input prompt using an LLM.
-
-* Takes: `state["prompt"]`
-* Sends to model (GPT)
-* Returns: improved prompt
-
-👉 This is the **core generation step**
-
----
-
-### 2. evaluate.py
-
-**Role:** Scores the improved prompt.
-
-Evaluates based on:
-
-* Relevance
-* Specificity
-* Clarity
-
-Returns:
-
-* Scores
-* Feedback
-
-👉 This is the **quality measurement layer**
+### 1. `main.py`
+- Entry point of the application
+- Takes user input:
+  - Prompt
+  - Use Case
+  - Audience
+  - Tone
+  - Goal
+- Runs the full pipeline
 
 ---
 
-### 3. check_quality.py
-
-**Role:** Decides whether the prompt is good enough.
-
-* Calculates average score
-* Compares with threshold (e.g., ≥ 8)
-
-If:
-
-* ✅ Good → Stop pipeline
-* ❌ Not good → Send for optimization
-
-👉 This is the **decision engine**
+### 2. `generator.py`
+- Core AI generation logic
+- Converts structured prompt into final content
+- Handles:
+  - LinkedIn Post
+  - Blog
+  - Cold Email
 
 ---
 
-### 4. optimize.py
-
-**Role:** Controls iteration.
-
-* Tracks number of attempts
-* Decides whether to retry
-* Prevents infinite loops
-
-👉 This is the **loop controller**
+### 3. `templates.py`
+- Contains dynamic templates for each use case
+- Ensures:
+  - Correct format
+  - Structured output
+  - Use-case specific behavior
 
 ---
 
-### 5. human_review.py (Optional)
-
-**Role:** Manual validation step.
-
-* Allows user to approve/reject
-* Adds human-in-the-loop control
-
-👉 Useful for production systems
+### 4. `evaluate.py`
+- Scores prompt quality based on:
+  - Relevance
+  - Specificity
+  - Clarity
+- Selects best version of prompt
 
 ---
 
-### 6. ask_user.py (Optional)
-
-**Role:** Handles user input dynamically.
-
-* Accepts prompt input from user
-* Can replace static `prompt.txt`
+### 5. `check_quality.py`
+- Decides whether output is good enough
+- Stops unnecessary iterations
+- Improves performance
 
 ---
 
-### 7. app_graph.py
+## ⚙️ Features
 
-**Role:** Defines the pipeline flow using LangGraph.
-
-* Connects all nodes
-* Controls execution order
-
-👉 This is the **brain of the system**
-
----
-
-### 8. state.py
-
-**Role:** Maintains shared data across nodes.
-
-Stores:
-
-* Prompt
-* Improved prompt
-* Scores
-* Feedback
-* Attempt count
-
-👉 This is the **memory layer**
+✅ Dynamic Use Case Handling  
+✅ Audience-Aware Content  
+✅ Tone Control  
+✅ Goal-Oriented Output  
+✅ Fast Execution (< 5 seconds)  
+✅ Clean Modular Architecture  
 
 ---
 
-## 📊 Evaluation Metrics
+## 🚀 Example
 
-Each prompt is scored based on:
+### Input:
 
-| Metric      | Description                   |
-| ----------- | ----------------------------- |
-| Relevance   | How well it matches the task  |
-| Specificity | Level of detail and precision |
-| Clarity     | Ease of understanding         |
+Prompt: Write about APIs
+Use Case: LinkedIn Post
+Audience: AI Engineers
+Tone: Professional
+Goal: Engagement
 
----
 
-## ▶️ How to Run
-
-### 1. Install dependencies
-
-```
-pip install -r requirements.txt
-```
-
-### 2. Add API Key
-
-Create `.env` file:
-
-```
-OPENAI_API_KEY=your_api_key_here
-```
-
-### 3. Run the project
-
-```
-python main.py
-```
+### Output:
+👉 Structured, engaging LinkedIn post with hook, insights, CTA
 
 ---
 
-## 📌 Example Workflow
+## 🛠️ Tech Stack
 
-Input:
-
-```
-Improve the prompt
-```
-
-System:
-
-* Generates improved version
-* Evaluates it
-* Iterates if needed
-
-Output:
-
-```
-A structured, detailed prompt with rules, constraints, and format
-```
+- Python
+- OpenAI (GPT models)
+- LangChain
 
 ---
 
-## 🚀 Future Improvements
+## ⚡ Future Improvements
 
-* Multi-prompt generation (best selection)
-* UI using Streamlit
-* Prompt history tracking
-* Scoring visualization dashboard
-* Integration with real applications
-
----
-
-## 👤 Author
-
-Raji
-AI Engineer (Learning & Building Phase)
+- Streamlit Web App UI
+- API Deployment (FastAPI)
+- Multi-language support
+- Prompt memory system
+- User history tracking
 
 ---
 
-## ⭐ Key Learning
+## 🎯 Key Learning
 
-This project demonstrates:
-
-* Prompt engineering is iterative
-* Evaluation is critical in AI systems
-* Small pipeline issues can break output
-* Structured workflows improve reliability
+- Prompt engineering alone is not enough  
+- Context (use case, audience, tone) is critical  
+- Evaluation loops improve output quality  
 
 ---
+
+## 📌 Status
+
+✅ Working Prototype  
+⚡ Ready for Portfolio  
+🚧 Moving towards Production  
+
+---
+
+## 🤝 Connect
+
+If you're building in AI / GenAI, let's connect!
