@@ -1,4 +1,35 @@
+# Python
 __pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Env
 .env
 venv/
-*.pyc
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Testing
+.pytest_cache/
+
+# Coverage
+.coverage
+htmlcov/
+
+# LangGraph
+*.sqlite
+
+# Temporary
+tmp/
+temp/

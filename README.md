@@ -1,285 +1,244 @@
-# Prompt Evaluator & Optimizer Agent 🚀
+# AI Content Orchestration Engine
 
-## 📌 Overview
-
-This project is an AI-powered **Prompt Optimization Pipeline** built using Python and LangChain.
-
-It is designed to:
-
-* Improve raw prompts
-* Evaluate their quality
-* Iteratively refine them
-* Produce a final, high-quality prompt
-
-Instead of manually rewriting prompts, this system automates the process using structured AI workflows.
+A production-grade, multi-stage AI content generation pipeline built with FastAPI, LangChain, and OpenAI. Generates audience-aware, platform-optimized, humanized content across any format — LinkedIn posts, blog articles, cold emails, ad copy, Twitter threads, SEO articles, and more.
 
 ---
 
-## 🎯 Problem Statement
+## Quickstart
 
-Writing prompts is easy.
-But writing **high-quality prompts** that are:
+### 1. Activate virtual environment
 
-* Clear
-* Specific
-* Structured
-* Effective
+```bash
+# Windows
+venv\Scripts\activate
 
-is difficult and inconsistent.
-
-Most developers:
-
-* Rewrite prompts manually
-* Don’t evaluate quality
-* Lack a feedback loop
-
----
-
-## 💡 Solution
-
-This project introduces a **multi-node pipeline** that:
-
-1. Improves prompts using an LLM
-2. Evaluates them using scoring metrics
-3. Decides whether to iterate or stop
-4. Outputs a refined version
-
----
-
-## ⚙️ How the System Works
-
-### 🔁 Pipeline Flow
-
-User Input / prompt.txt
-↓
-run_agent.py (LLM improves prompt)
-↓
-evaluate.py (scores prompt)
-↓
-check_quality.py (decides if good enough)
-↓
-optimize.py (retries if needed)
-↓
-human_review.py (optional approval)
-↓
-FINAL OUTPUT
-
----
-
-## 🧩 Project Structure
-
-```
-v2_ai_evaluator/
-│
-├── main.py                # Entry point
-├── app_graph.py           # LangGraph pipeline definition
-├── state.py               # Shared state across nodes
-│
-├── prompt.txt             # Input prompt
-├── requirements.txt       # Dependencies
-├── README.md              # Documentation
-│
-├── nodes/
-│   ├── run_agent.py       # Prompt improvement (LLM call)
-│   ├── evaluate.py        # Scoring logic
-│   ├── check_quality.py   # Quality threshold decision
-│   ├── optimize.py        # Iteration logic
-│   ├── human_review.py    # Manual approval (optional)
-│   ├── ask_user.py        # User input handling (optional)
+# macOS / Linux
+source venv/bin/activate
 ```
 
----
+### 2. Install dependencies
 
-## 🧠 Node-Level Explanation
-
-### 1. run_agent.py
-
-**Role:** Improves the input prompt using an LLM.
-
-* Takes: `state["prompt"]`
-* Sends to model (GPT)
-* Returns: improved prompt
-
-👉 This is the **core generation step**
-
----
-
-### 2. evaluate.py
-
-**Role:** Scores the improved prompt.
-
-Evaluates based on:
-
-* Relevance
-* Specificity
-* Clarity
-
-Returns:
-
-* Scores
-* Feedback
-
-👉 This is the **quality measurement layer**
-
----
-
-### 3. check_quality.py
-
-**Role:** Decides whether the prompt is good enough.
-
-* Calculates average score
-* Compares with threshold (e.g., ≥ 8)
-
-If:
-
-* ✅ Good → Stop pipeline
-* ❌ Not good → Send for optimization
-
-👉 This is the **decision engine**
-
----
-
-### 4. optimize.py
-
-**Role:** Controls iteration.
-
-* Tracks number of attempts
-* Decides whether to retry
-* Prevents infinite loops
-
-👉 This is the **loop controller**
-
----
-
-### 5. human_review.py (Optional)
-
-**Role:** Manual validation step.
-
-* Allows user to approve/reject
-* Adds human-in-the-loop control
-
-👉 Useful for production systems
-
----
-
-### 6. ask_user.py (Optional)
-
-**Role:** Handles user input dynamically.
-
-* Accepts prompt input from user
-* Can replace static `prompt.txt`
-
----
-
-### 7. app_graph.py
-
-**Role:** Defines the pipeline flow using LangGraph.
-
-* Connects all nodes
-* Controls execution order
-
-👉 This is the **brain of the system**
-
----
-
-### 8. state.py
-
-**Role:** Maintains shared data across nodes.
-
-Stores:
-
-* Prompt
-* Improved prompt
-* Scores
-* Feedback
-* Attempt count
-
-👉 This is the **memory layer**
-
----
-
-## 📊 Evaluation Metrics
-
-Each prompt is scored based on:
-
-| Metric      | Description                   |
-| ----------- | ----------------------------- |
-| Relevance   | How well it matches the task  |
-| Specificity | Level of detail and precision |
-| Clarity     | Ease of understanding         |
-
----
-
-## ▶️ How to Run
-
-### 1. Install dependencies
-
-```
+```bash
 pip install -r requirements.txt
 ```
 
-### 2. Add API Key
+### 3. Configure environment
 
-Create `.env` file:
-
+```bash
+copy .env.example .env        # Windows
+cp .env.example .env          # macOS / Linux
+# then edit .env and set OPENAI_API_KEY=sk-...
 ```
-OPENAI_API_KEY=your_api_key_here
+
+### 4. Run the server
+
+```bash
+uvicorn main:app --reload
 ```
 
-### 3. Run the project
+Server starts at **http://localhost:8000**
+Auto-generated API docs at **http://localhost:8000/docs**
 
+---
+
+## Test the API
+
+### Generate content
+
+```bash
+curl -X POST http://localhost:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Why most RAG pipelines fail in production",
+    "use_case": "LinkedIn Post",
+    "audience": "AI Engineers",
+    "tone": "Direct",
+    "goal": "Spark conversation about production AI"
+  }'
 ```
-python main.py
+
+### Validate existing content
+
+```bash
+curl -X POST http://localhost:8000/validate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "Your content here...",
+    "use_case": "LinkedIn Post"
+  }'
+```
+
+### List available options
+
+```bash
+curl http://localhost:8000/styles      # Writing styles
+curl http://localhost:8000/platforms   # Supported platforms
+curl http://localhost:8000/audiences   # Audience profiles
+curl http://localhost:8000/health      # Health check
+```
+
+### Run tests (no API key needed for unit tests)
+
+```bash
+pytest tests/ -v -m "not integration"    # unit tests only
+pytest tests/ -v                          # all tests (requires OPENAI_API_KEY)
 ```
 
 ---
 
-## 📌 Example Workflow
+## Request Schema
 
-Input:
-
-```
-Improve the prompt
-```
-
-System:
-
-* Generates improved version
-* Evaluates it
-* Iterates if needed
-
-Output:
-
-```
-A structured, detailed prompt with rules, constraints, and format
+```json
+{
+  "prompt":           "Topic or brief",
+  "use_case":         "LinkedIn Post | Blog | Cold Email | Ad Copy | Twitter Thread | SEO Article | Technical Post",
+  "audience":         "AI Engineers | Startup Founders | Marketers | Developers | Enterprise Buyers | Students",
+  "tone":             "Direct | Professional | Conversational | Casual",
+  "goal":             "What the content should achieve",
+  "style":            "(optional) Technical Educator | Contrarian Expert | Founder Storyteller | Minimalist Operator | Strategic Advisor | Storyteller | Analyst",
+  "intent":           "(optional) create | improve | rewrite | convert — auto-detected if omitted",
+  "existing_content": "(optional) Content to improve / rewrite / convert",
+  "target_use_case":  "(optional) Target platform for convert intent"
+}
 ```
 
 ---
 
-## 🚀 Future Improvements
+## Pipeline — 13 Stages
 
-* Multi-prompt generation (best selection)
-* UI using Streamlit
-* Prompt history tracking
-* Scoring visualization dashboard
-* Integration with real applications
+```
+POST /generate
+      │
+      ▼
+┌──────────────────────────────┐
+│  1.  Intent Analyzer         │  Detects create / improve / rewrite / convert
+├──────────────────────────────┤
+│  2.  Audience Engine         │  Loads vocabulary, pain points, trust signals
+├──────────────────────────────┤
+│  3.  Strategy Engine         │  Platform rules + style selection
+├──────────────────────────────┤
+│  3b. Experience Patterns     │  Injects production incident / tradeoff patterns
+├──────────────────────────────┤
+│  3c. Style Entropy + Memory  │  Per-request variation directives + anti-repetition
+├──────────────────────────────┤
+│  3d. Context Assembly        │  Builds ContextPackage + pre-generation validation
+├──────────────────────────────┤
+│  4.  Prompt Optimizer        │  Context-engine prompt (few-shot + failure memory)
+├──────────────────────────────┤
+│  5.  Content Generator       │  OpenAI LLM call
+├──────────────────────────────┤
+│  5b. Humanization Validator  │  Scores specificity, tension, originality, experience
+├──────────────────────────────┤
+│  5c. Humanization Repair     │  Deterministic + LLM surgical fix if score < threshold
+├──────────────────────────────┤
+│  6.  Quality Validator       │  13 deterministic checks, score 0-100
+├──────────────────────────────┤
+│  7.  Quality Auto-Repair     │  Fixes failing checks (deterministic + LLM)
+├──────────────────────────────┤
+│  8.  Formatter               │  Platform-native structure (hashtags, spacing, etc.)
+├──────────────────────────────┤
+│  8b. Memory Registration     │  Anti-repetition + failure-aware generation
+└──────────────────────────────┘
+      │
+      ▼
+  ContentResponse
+```
 
 ---
 
-## 👤 Author
+## Project Structure
 
-Raji
-AI Engineer (Learning & Building Phase)
+```
+prompt_evaluator_agent/
+│
+├── main.py                         # Entry point → delegates to app/main.py
+├── requirements.txt
+├── .env.example
+├── README.md
+│
+├── app/
+│   ├── main.py                     # FastAPI app definition (v4.1.0)
+│   │
+│   ├── api/
+│   │   └── routes.py               # All endpoints: /generate, /validate, /styles, /platforms, /audiences
+│   │
+│   ├── agents/                     # Pipeline stage executors
+│   │   ├── intent_analyzer.py      # Stage 1 — detect create/improve/rewrite/convert
+│   │   ├── audience_engine.py      # Stage 2 — audience profile loader
+│   │   ├── strategy_engine.py      # Stage 3 — platform + style strategy
+│   │   ├── prompt_optimizer.py     # Stage 4 — context-engine prompt builder
+│   │   ├── content_generator.py    # Stage 5 — OpenAI LLM call
+│   │   ├── validator.py            # Stage 6 — 13-check quality scorer
+│   │   ├── repair_engine.py        # Stage 7 — deterministic + LLM repair
+│   │   └── formatter.py            # Stage 8 — platform-native formatting
+│   │
+│   ├── context/                    # Context Engineering package
+│   │   ├── context_builder.py      # ContextPackage — assembles + serializes to prompt
+│   │   ├── platform_context.py     # Typed platform rules (LinkedInContext, BlogContext, ...)
+│   │   ├── audience_context.py     # Typed audience profiles (EngineerAudienceContext, ...)
+│   │   ├── style_context.py        # Typed style behaviors (ContraryExpertStyle, ...)
+│   │   ├── examples_context.py     # Few-shot good/bad examples with explanations
+│   │   ├── failure_memory.py       # Per-(use_case, audience) failure tracking
+│   │   └── banned_phrases.py       # Centralized banned phrase registry
+│   │
+│   ├── services/                   # Humanization + entropy services
+│   │   ├── experience_patterns.py  # 24 production incident/tradeoff patterns
+│   │   ├── style_entropy.py        # Per-request variation directives
+│   │   ├── human_validator.py      # 4-dimension humanization scorer (0-100)
+│   │   └── content_memory.py       # Ring-buffer anti-repetition tracker
+│   │
+│   ├── knowledge/                  # Static knowledge base (platform/audience/style profiles)
+│   │   ├── platforms/profiles.py
+│   │   ├── audiences/profiles.py
+│   │   ├── styles/profiles.py
+│   │   └── examples/content_examples.py
+│   │
+│   ├── workflows/
+│   │   └── content_workflow.py     # Full 13-stage pipeline orchestrator
+│   │
+│   ├── schemas/
+│   │   ├── request.py              # ContentRequest, ValidateRequest
+│   │   └── response.py             # ContentResponse, ValidationResult, HumanizationResult
+│   │
+│   └── core/
+│       ├── config.py               # Environment config + thresholds
+│       ├── llm.py                  # LLM client factory
+│       └── prompts.py              # Prompt assembly utilities
+│
+└── tests/
+    └── test_workflow.py            # Unit + integration tests
+```
 
 ---
 
-## ⭐ Key Learning
+## Environment Variables
 
-This project demonstrates:
-
-* Prompt engineering is iterative
-* Evaluation is critical in AI systems
-* Small pipeline issues can break output
-* Structured workflows improve reliability
+| Variable | Default | Description |
+|---|---|---|
+| `OPENAI_API_KEY` | *(required)* | OpenAI API key |
+| `INTENT_MODEL` | `gpt-4o-mini` | Model for intent detection |
+| `STRATEGY_MODEL` | `gpt-4o-mini` | Model for strategy generation |
+| `GENERATE_MODEL` | `gpt-4o-mini` | Model for content generation |
+| `REPAIR_MODEL` | `gpt-4o-mini` | Model for auto-repair |
+| `VALIDATION_PASS_THRESHOLD` | `75` | Quality score required to skip repair |
+| `AUTO_REPAIR_THRESHOLD` | `55` | Score below which repair runs |
+| `HUMANIZATION_REPAIR_THRESHOLD` | `60` | Humanization score below which repair runs |
 
 ---
+
+## Supported Platforms
+
+| Platform | Key |
+|---|---|
+| LinkedIn Post | `LinkedIn Post` |
+| Blog | `Blog` |
+| Cold Email | `Cold Email` |
+| Ad Copy | `Ad Copy` |
+| Twitter Thread | `Twitter Thread` |
+| SEO Article | `SEO Article` |
+| Technical Post | `Technical Post` |
+| Educational Content | `Educational Content` |
+
+## Supported Writing Styles
+
+`Technical Educator` · `Contrarian Expert` · `Founder Storyteller` · `Minimalist Operator` · `Strategic Advisor` · `Storyteller` · `Analyst`

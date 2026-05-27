@@ -1,26 +1,14 @@
-from generator import generate_content
+"""
+AI Content Orchestration Engine — Entry Point
 
+Quick start:
+    uvicorn main:app --reload               # development
+    uvicorn main:app --host 0.0.0.0 --port 8000   # production
 
-def run():
-    print("🚀 AI Content Engine\n")
+Alternatively (explicit app package path):
+    uvicorn app.main:app --reload
 
-    prompt = input("Enter your prompt: ").strip()
-    use_case = input("Use Case (LinkedIn Post / Cold Email / Blog): ").strip()
-    audience = input("Target Audience: ").strip()
-    tone = input("Tone: ").strip()
-    goal = input("Goal: ").strip()
+API docs auto-generated at: http://localhost:8000/docs
+"""
 
-    print("\n⏳ Generating...\n")
-
-    try:
-        result = generate_content(prompt, use_case, audience, tone, goal)
-
-        print("\n🎯 FINAL OUTPUT:\n")
-        print(result)
-
-    except Exception as e:
-        print(f"\n❌ Error: {e}")
-
-
-if __name__ == "__main__":
-    run()
+from app.main import app  # noqa: F401  re-exported for uvicorn main:app
