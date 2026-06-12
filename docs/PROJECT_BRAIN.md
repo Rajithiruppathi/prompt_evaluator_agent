@@ -9,11 +9,12 @@
 
 A production-grade AI content generation pipeline that accepts a topic or brief and
 produces platform-optimized, audience-aware, humanized content across 8 supported
-formats. The pipeline is executed as a compiled LangGraph `StateGraph` with 13 nodes
-and 2 conditional repair branches.
+formats. The pipeline is executed as a compiled LangGraph `StateGraph` with 13 nodes,
+2 conditional repair branches, and a bounded quality repair loop with convergence
+detection (Phase 2).
 
-**Current Version:** 5.1.0
-**Stack:** FastAPI · LangGraph · LangChain · OpenAI or Gemini (provider-selectable)
+**Current Version:** 5.5.0
+**Stack:** FastAPI · LangGraph · LangChain · OpenAI or Gemini · Resilient provider chain (retry + fallback) · Mock Mode
 
 ---
 
@@ -43,7 +44,8 @@ LangGraph StateGraph  (app/workflows/graph.py)
     ├─ [humanize_validate]  Stage 5b — 4-dimension humanization scoring
     ├─ ── score < 60 ──► [humanize_repair]  Stage 5c (conditional)
     ├─ [quality_validate]   Stage 6  — 13-check deterministic quality scoring
-    ├─ ── score < 55 ──► [quality_repair]   Stage 7 (conditional)
+    ├─ ── score < 55 ──► [quality_repair]   Stage 7 (conditional, loops back to quality_validate)
+    │     └─ ── bounded loop (MAX_REPAIR_ATTEMPTS, convergence) ──► back to quality_validate ──┘
     ├─ [format]             Stage 8  — platform-native formatting
     └─ [memory]             Stage 8b — content memory + failure recording
     │
@@ -90,9 +92,9 @@ HTTP Client
 | `humanize_validate` | `humanize_repair` | **Conditional** | score < 60 |
 | `humanize_validate` | `quality_validate` | **Conditional** | score ≥ 60 |
 | `humanize_repair` | `quality_validate` | Normal | — |
-| `quality_validate` | `quality_repair` | **Conditional** | score < 55 AND failures exist |
-| `quality_validate` | `format` | **Conditional** | score ≥ 55 OR no failures |
-| `quality_repair` | `format` | Normal | — |
+| `quality_validate` | `quality_repair` | **Conditional** | score < 55 AND failures AND attempts < MAX AND not converged |
+| `quality_validate` | `format` | **Conditional** | score ≥ 55, OR no failures, OR attempts ≥ MAX, OR converged |
+| `quality_repair` | `quality_validate` | Normal | — (loop back for re-validation) |
 | `format` | `memory` | Normal | — |
 | `memory` | END | Normal | — |
 
@@ -100,8 +102,10 @@ HTTP Client
 
 - **Fast path** (both repairs skipped): 11 nodes execute
 - **Humanization repair only**: 12 nodes
-- **Quality repair only**: 12 nodes
-- **Both repairs**: 13 nodes (all nodes)
+- **Quality repair only (1 attempt)**: 12 nodes; quality_validate runs twice
+- **Both repairs (1 attempt each)**: 13 nodes; quality_validate runs twice
+- **Quality repair N attempts**: quality_validate runs N+1 times, quality_repair runs N times
+- **Max attempts or convergence exit**: loop terminates, format runs with best result so far
 
 ---
 
@@ -122,6 +126,7 @@ Stage outputs: intent → audience_context → strategy →
                humanization_result, humanization_repaired →
                validation →
                quality_repaired, final →
+               repair_attempt_count, previous_quality_score, convergence_reached →
                pipeline (cumulative list of PipelineStage records)
 ```
 
@@ -134,8 +139,23 @@ typed as `Any` — they are live in-process objects, never persisted or checkpoi
 
 **File:** `app/core/llm.py`
 
-Provider-agnostic factory. Supports two providers selectable via `LLM_PROVIDER` env var.
-Four named roles; each is a lazy-instantiated singleton in `_pool`.
+Resilient provider-chain factory. Each named role returns a `ResilientLLM` instance
+that wraps an ordered provider chain: primary → optional fallback → mock last resort.
+On `.invoke()`, providers are tried in order with `LLM_RETRY_ATTEMPTS` attempts each.
+If all real providers fail, the mock last-resort returns empty content so the pipeline
+never crashes.
+
+### Provider Chain
+
+```
+LLM_PROVIDER (primary)
+    └─ retry up to LLM_RETRY_ATTEMPTS
+FALLBACK_PROVIDER (secondary, if set and different from primary)
+    └─ retry up to LLM_RETRY_ATTEMPTS
+_MockProvider (always last — never fails, returns empty string)
+```
+
+### Role defaults
 
 | Role | Getter | Default — OpenAI | Default — Gemini | Temp |
 |---|---|---|---|---|
@@ -147,7 +167,15 @@ Four named roles; each is a lazy-instantiated singleton in `_pool`.
 `intent_llm()` and `strategy_llm()` are defined but currently have no callers —
 `intent_node` and `strategy_node` are fully deterministic.
 
-Central factory: `get_llm(role: str) → BaseChatModel`
+Central factory: `get_llm(role: str) → ResilientLLM`
+
+### Logging
+
+Every LLM call emits structured log lines:
+- SUCCESS: `LLM | role=X provider=Y attempt=A/B latency=Zms`
+- FAILURE: `LLM | role=X provider=Y attempt=A/B FAILED: ErrorType: message`
+- EXHAUSTED: `LLM | role=X provider=Y all N attempt(s) exhausted — trying next provider`
+- MOCK USED: `LLM | role=X all real providers failed — returning empty mock response`
 
 ---
 
@@ -218,7 +246,10 @@ Score 0–100. Severity weights: critical=15, high=10, medium=5, low=2.
 | `VALIDATION_PASS_THRESHOLD` | 75 | Score ≥ 75 → approved as-is |
 | `AUTO_REPAIR_THRESHOLD` | 55 | Score < 55 AND failures → quality repair |
 | `HUMANIZATION_REPAIR_THRESHOLD` | 60 | Score < 60 → humanization repair |
-| `MAX_REPAIR_ATTEMPTS` | 2 | Configured but not yet enforced as a loop |
+| `MAX_REPAIR_ATTEMPTS` | 2 | Max quality repair loop iterations before forced exit |
+| `FALLBACK_PROVIDER` | *(empty)* | Secondary provider if primary fails; `openai` or `gemini` |
+| `LLM_RETRY_ATTEMPTS` | `1` | Attempts per provider before falling back (1 = no retry) |
+| `MOCK_MODE` | `false` | `true` → skip all LLM calls; run full pipeline without API keys |
 
 ---
 
@@ -267,20 +298,24 @@ Both are thread-safe via `Lock`. Neither survives process restart. No Redis/DB b
 - Deterministic 13-check quality scoring (no LLM required)
 - 4-dimension humanization scoring (no LLM required)
 - Conditional repair for both quality and humanization
+- Resilient LLM provider chain: primary → optional fallback → mock last resort; never crashes on API failure
+- Structured LLM observability: provider name, attempt number, latency, and failure reason in every log line
+- MOCK_MODE: full pipeline runs without any API key — all LLM calls replaced by deterministic fakes
+- Bounded quality repair loop: up to MAX_REPAIR_ATTEMPTS iterations with convergence detection
+- Convergence detection: stops looping if repair did not improve the quality score
+- Loop termination metadata exposed in every response (attempt count, convergence flag, final score)
 - Platform-native formatting (hashtag positioning, tweet numbering, etc.)
 - Content memory (ring buffer, anti-repetition)
 - Failure memory (per use-case+audience, feeds future prompts)
-- Full pipeline execution trace in every response
+- Full pipeline execution trace in every response (includes per-iteration scores and deltas)
 - Provider-selectable LLM backend (OpenAI or Gemini)
-- LangGraph StateGraph orchestration with conditional branches
+- LangGraph StateGraph orchestration with conditional branches and repair loop
 
 ## Current Limitations
 
 - Memory stores are in-process only — do not survive restart, not safe for multi-instance deployment
-- No re-validation after quality repair — repair may introduce new issues
 - `intent_llm()` and `strategy_llm()` have no callers — intent and strategy are deterministic only
 - Pre-generation check (`pre_check`) stored in state but no node acts on failures
-- `MAX_REPAIR_ATTEMPTS` is configured but not wired as a graph loop — repair runs at most once
 - No checkpointing — graph state cannot be resumed or inspected mid-run
 - No human-in-the-loop interruption point
 - `experience_node` and `entropy_node` are independent but run serially
@@ -291,6 +326,9 @@ Both are thread-safe via `Lock`. Neither survives process restart. No Redis/DB b
 
 ```
 prompt_evaluator_agent/
+│
+├── logs/                           # Auto-created at startup (git-ignored)
+│   └── app.log                     # Persistent append-mode log file
 │
 ├── main.py                         # Entry point — delegates to app/main.py
 ├── requirements.txt                # All dependencies
@@ -387,4 +425,4 @@ prompt_evaluator_agent/
 
 ---
 
-*Last updated: 2026-05-27 — v5.1.0*
+*Last updated: 2026-05-27 — v5.5.0*

@@ -24,6 +24,7 @@ from typing import Optional
 
 from app.core.llm import repair_llm
 from app.core.prompts import bullet_list, assemble
+from app.core.config import MOCK_MODE
 from app.schemas.response import ValidationResult, ValidationFailure
 from app.services.human_validator import HumanizationResult
 
@@ -93,8 +94,10 @@ def _apply_deterministic_repairs(
         elif failure.check == "content_length":
             max_words = platform.get("validation", {}).get("max_words", 99999)
             if len(repaired.split()) > max_words:
-                repaired = _trim_to_length(repaired, max_words)
-                fixed.append("content_length")
+                trimmed = _trim_to_length(repaired, max_words)
+                if trimmed != repaired:
+                    repaired = trimmed
+                    fixed.append("content_length")
 
         elif failure.check == "exclamations":
             repaired = _fix_exclamations(repaired)
@@ -328,13 +331,20 @@ def repair_humanization(
         humanization.experience_score < 10
     )
     if needs_llm:
-        logger.info(
-            f"Humanization LLM repair | "
-            f"spec={humanization.specificity_score} tension={humanization.tension_score} "
-            f"exp={humanization.experience_score}"
-        )
-        repaired = _llm_humanization_repair(repaired, humanization, ctx)
-        any_change = True
+        if MOCK_MODE:
+            logger.info(
+                "[MOCK MODE ENABLED] Skipping LLM humanization repair — "
+                f"spec={humanization.specificity_score} tension={humanization.tension_score} "
+                f"exp={humanization.experience_score}"
+            )
+        else:
+            logger.info(
+                f"Humanization LLM repair | "
+                f"spec={humanization.specificity_score} tension={humanization.tension_score} "
+                f"exp={humanization.experience_score}"
+            )
+            repaired = _llm_humanization_repair(repaired, humanization, ctx)
+            any_change = True
 
     return repaired, any_change
 
@@ -377,10 +387,16 @@ def repair(
     # Step 2: LLM repair for remaining non-deterministic failures
     remaining = [f for f in all_key_failures if f.check not in fixed]
     if remaining:
-        logger.info(f"Quality LLM repair for {len(remaining)} issue(s): {[f.check for f in remaining]}")
-        instruction = _build_quality_repair_prompt(repaired, remaining, ctx)
-        llm = repair_llm()
-        repaired = str(llm.invoke(instruction).content).strip()
-        any_repair = True
+        if MOCK_MODE:
+            logger.info(
+                f"[MOCK MODE ENABLED] Skipping LLM quality repair for "
+                f"{len(remaining)} issue(s): {[f.check for f in remaining]}"
+            )
+        else:
+            logger.info(f"Quality LLM repair for {len(remaining)} issue(s): {[f.check for f in remaining]}")
+            instruction = _build_quality_repair_prompt(repaired, remaining, ctx)
+            llm = repair_llm()
+            repaired = str(llm.invoke(instruction).content).strip()
+            any_repair = True
 
     return repaired, any_repair

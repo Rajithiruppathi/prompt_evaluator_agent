@@ -44,10 +44,17 @@ def generate(request: ContentRequest) -> ContentResponse:
         f"intent={request.intent or 'auto'} | style={request.style or 'none'}"
     )
     try:
-        return run_workflow(request)
+        response = run_workflow(request)
     except Exception as e:
         logger.error(f"[/generate] Pipeline failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+    if not response.final_output.strip():
+        logger.error(
+            f"[/generate] Pipeline returned empty content — all LLM providers unavailable. "
+            f"use_case={request.use_case} audience={request.audience}"
+        )
+        raise HTTPException(status_code=503, detail="Content generation failed — all LLM providers unavailable. Check API keys and provider config.")
+    return response
 
 
 @router.post("/validate", response_model=ValidateResponse)

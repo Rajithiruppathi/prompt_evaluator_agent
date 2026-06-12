@@ -336,6 +336,75 @@ No other files are touched.
 
 ---
 
+---
+
+## Phase 2 — Bounded Quality Repair Loop (v5.2.0)
+
+### What changed
+
+The single `quality_repair → format` edge in Phase 1 is replaced with a loop:
+
+```
+quality_validate ──► quality_repair ──► quality_validate  (loop)
+       │
+       └──► format  (exit when any exit condition is met)
+```
+
+**Exit conditions (route_quality returns "format"):**
+1. `score >= AUTO_REPAIR_THRESHOLD` — quality is acceptable
+2. `not failures` — nothing left to fix
+3. `repair_attempt_count >= MAX_REPAIR_ATTEMPTS` — budget exhausted
+4. `convergence_reached` — repair did not improve the score
+
+### New state fields
+
+| Field | Type | Set by | Purpose |
+|---|---|---|---|
+| `repair_attempt_count` | `int` | `quality_repair_node` | Loop counter |
+| `previous_quality_score` | `Optional[int]` | `quality_repair_node` | Score before this repair, for convergence check |
+| `convergence_reached` | `bool` | `quality_validate_node` | True if new score ≤ previous score |
+
+### Convergence diagram
+
+```
+quality_validate (visit 1)
+    score=48, failures=3
+    route_quality → quality_repair
+quality_repair (attempt 1)
+    previous_score=48, working_content=repaired_v1
+    repair_attempt_count=1
+quality_validate (visit 2)
+    score=52, delta=+4, Re-validation 1/2
+    route_quality → quality_repair  (still below threshold)
+quality_repair (attempt 2)
+    previous_score=52, working_content=repaired_v2
+    repair_attempt_count=2
+quality_validate (visit 3)
+    score=51, delta=-1, Re-validation 2/2, CONVERGED
+    route_quality → format  (repair_count=2 >= MAX or convergence)
+```
+
+### Response metadata added
+
+```json
+{
+  "repair_attempt_count": 2,
+  "convergence_reached":  true,
+  "final_quality_score":  51
+}
+```
+
+### Files modified in Phase 2
+
+| File | Change |
+|---|---|
+| `app/workflows/state.py` | +3 loop fields |
+| `app/workflows/nodes.py` | `quality_validate_node`: convergence, loop-aware skip; `quality_repair_node`: counter + content update |
+| `app/workflows/graph.py` | `route_quality` expanded; `quality_repair → quality_validate` edge |
+| `app/workflows/content_workflow.py` | Initial state fields + metadata |
+
+---
+
 ## 13. Risks & Mitigations
 
 | Risk | Mitigation |

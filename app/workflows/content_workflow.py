@@ -58,6 +58,10 @@ def run(request: ContentRequest) -> ContentResponse:
         "target_use_case":       request.target_use_case,
         "humanization_repaired": False,
         "quality_repaired":      False,
+        # Phase 2 loop fields
+        "repair_attempt_count":   0,
+        "previous_quality_score": None,
+        "convergence_reached":    False,
         "pipeline":              [],
     }
 
@@ -75,9 +79,11 @@ def run(request: ContentRequest) -> ContentResponse:
     humanization_result  = state["humanization_result"]
     experience_patterns  = state["experience_patterns"]
     entropy_directives   = state["entropy_directives"]
-    humanization_repaired = state.get("humanization_repaired", False)
-    quality_repaired      = state.get("quality_repaired", False)
-    pipeline              = state.get("pipeline", [])
+    humanization_repaired  = state.get("humanization_repaired", False)
+    quality_repaired       = state.get("quality_repaired", False)
+    repair_attempt_count   = state.get("repair_attempt_count", 0)
+    convergence_reached    = state.get("convergence_reached", False)
+    pipeline               = state.get("pipeline", [])
 
     was_repaired = humanization_repaired or quality_repaired
 
@@ -120,9 +126,12 @@ def run(request: ContentRequest) -> ContentResponse:
             "validation_score":      validation.score,
             "humanization_score":    humanization_result.score,
             "humanization_grade":    humanization_result.grade,
-            "humanization_repaired": humanization_repaired,
-            "quality_repaired":      quality_repaired,
-            "entropy_directives":    list(entropy_directives.keys()),
-            "experience_patterns":   [p["id"] for p in experience_patterns],
+            "humanization_repaired":  humanization_repaired,
+            "quality_repaired":       quality_repaired,
+            "repair_attempt_count":   repair_attempt_count,
+            "convergence_reached":    convergence_reached,
+            "final_quality_score":    validation.score,
+            "entropy_directives":     list(entropy_directives.keys()),
+            "experience_patterns":    [p["id"] for p in experience_patterns],
         },
     )

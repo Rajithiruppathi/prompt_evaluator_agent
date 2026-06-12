@@ -84,6 +84,54 @@ pytest tests/ -v -m "not integration"    # unit tests only
 pytest tests/ -v                          # all tests (requires OPENAI_API_KEY)
 ```
 
+### Enable automatic provider fallback
+
+```bash
+# Primary: OpenAI → Fallback: Gemini → Last resort: empty mock (never crashes)
+LLM_PROVIDER=openai
+FALLBACK_PROVIDER=gemini
+LLM_RETRY_ATTEMPTS=2   # try each provider twice before advancing
+OPENAI_API_KEY=sk-...
+GOOGLE_API_KEY=...
+```
+
+If OpenAI fails (quota, network, key expiry), the pipeline automatically retries
+with Gemini. Every attempt logs `provider`, `latency`, and the failure reason.
+If every provider fails, an empty response is returned and logged at ERROR level —
+the pipeline never crashes.
+
+---
+
+### Run the full pipeline without any API key
+
+```bash
+# In your .env (or inline):
+MOCK_MODE=true uvicorn main:app --reload
+
+# Or set in .env file:
+echo "MOCK_MODE=true" >> .env
+uvicorn main:app --reload
+```
+
+Then call `/generate` normally — all 13 pipeline stages execute, no LLM is invoked:
+
+```bash
+curl -X POST http://localhost:8000/generate \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Why RAG pipelines fail in production",
+    "use_case": "LinkedIn Post",
+    "audience": "AI Engineers",
+    "goal": "Educate",
+    "tone": "Direct"
+  }'
+```
+
+The response will contain `"MOCK GENERATED CONTENT: ..."` in `final_output` and a
+complete pipeline trace through all stages. Quality and humanization validators run
+normally. The repair loop will exhaust `MAX_REPAIR_ATTEMPTS` since no LLM improves
+the score — this exercises the convergence exit path.
+
 ---
 
 ## Request Schema
@@ -125,7 +173,7 @@ POST /generate
 ├──────────────────────────────┤
 │  4.  Prompt Optimizer        │  Context-engine prompt (few-shot + failure memory)
 ├──────────────────────────────┤
-│  5.  Content Generator       │  OpenAI LLM call
+│  5.  Content Generator       │  LLM call (OpenAI or Gemini — provider-selectable)
 ├──────────────────────────────┤
 │  5b. Humanization Validator  │  Scores specificity, tension, originality, experience
 ├──────────────────────────────┤
@@ -133,7 +181,8 @@ POST /generate
 ├──────────────────────────────┤
 │  6.  Quality Validator       │  13 deterministic checks, score 0-100
 ├──────────────────────────────┤
-│  7.  Quality Auto-Repair     │  Fixes failing checks (deterministic + LLM)
+│  7.  Quality Auto-Repair     │  Bounded retry loop (MAX_REPAIR_ATTEMPTS) with
+│                              │  convergence detection — loops back to validator
 ├──────────────────────────────┤
 │  8.  Formatter               │  Platform-native structure (hashtags, spacing, etc.)
 ├──────────────────────────────┤
@@ -215,13 +264,17 @@ prompt_evaluator_agent/
 
 | Variable | Default | Description |
 |---|---|---|
-| `OPENAI_API_KEY` | *(required)* | OpenAI API key |
-| `INTENT_MODEL` | `gpt-4o-mini` | Model for intent detection |
-| `STRATEGY_MODEL` | `gpt-4o-mini` | Model for strategy generation |
-| `GENERATE_MODEL` | `gpt-4o-mini` | Model for content generation |
-| `REPAIR_MODEL` | `gpt-4o-mini` | Model for auto-repair |
+| `MOCK_MODE` | `false` | `true` → full pipeline runs with no API key |
+| `LLM_PROVIDER` | `openai` | Primary provider: `openai` or `gemini` |
+| `FALLBACK_PROVIDER` | *(empty)* | Secondary provider if primary fails; `openai` or `gemini` |
+| `LLM_RETRY_ATTEMPTS` | `1` | Attempts per provider before falling back |
+| `OPENAI_API_KEY` | *(required if openai)* | OpenAI API key |
+| `GOOGLE_API_KEY` | *(required if gemini)* | Google AI API key |
+| `GENERATE_MODEL` | provider default | Model for content generation |
+| `REPAIR_MODEL` | provider default | Model for auto-repair |
 | `VALIDATION_PASS_THRESHOLD` | `75` | Quality score required to skip repair |
 | `AUTO_REPAIR_THRESHOLD` | `55` | Score below which repair runs |
+| `MAX_REPAIR_ATTEMPTS` | `2` | Max quality repair loop iterations |
 | `HUMANIZATION_REPAIR_THRESHOLD` | `60` | Humanization score below which repair runs |
 
 ---

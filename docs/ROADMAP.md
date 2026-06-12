@@ -23,6 +23,39 @@
 - [x] Per-provider model name defaults in `config.py`
 - [x] Lazy provider imports (only active SDK loaded)
 
+### v5.2.0 — Bounded Quality Repair Loop (Phase 2)
+- [x] Add `repair_attempt_count`, `previous_quality_score`, `convergence_reached` to `WorkflowState`
+- [x] Loop `quality_repair → quality_validate` (replaced `quality_repair → format` edge)
+- [x] Expanded `route_quality()`: 4 exit conditions (score, no failures, max attempts, convergence)
+- [x] Convergence detection in `quality_validate_node` (score ≤ previous → stop)
+- [x] Per-iteration stage detail with attempt counter and score delta
+- [x] Structured repair loop logging (attempt number, score before, termination reason)
+- [x] `repair_attempt_count`, `convergence_reached`, `final_quality_score` in response metadata
+- [x] `MAX_REPAIR_ATTEMPTS` now fully enforced
+
+### v5.3.0 — Mock Mode for Local Development
+- [x] `MOCK_MODE` env var in `config.py`
+- [x] `_mock_generate()` deterministic fake response in `content_generator.py`
+- [x] Mock branch in `repair_humanization()` — skips LLM, keeps deterministic pass
+- [x] Mock branch in `repair()` — skips LLM, keeps deterministic pass
+- [x] `[MOCK MODE ENABLED]` log on every bypassed LLM call
+- [x] `.env.example` updated with `MOCK_MODE=false` and usage notes
+- [x] README testing instructions for running without API keys
+
+### v5.4.0 — Resilient Provider Chain
+- [x] `ResilientLLM` class with ordered provider chain (primary → fallback → mock)
+- [x] Per-provider retry loop (`LLM_RETRY_ATTEMPTS`)
+- [x] `_MockProvider` last-resort — pipeline never crashes on API failure
+- [x] `FALLBACK_PROVIDER` env var — optional secondary provider
+- [x] `LLM_RETRY_ATTEMPTS` env var — configurable retry count
+- [x] Structured log lines: provider, attempt, latency, failure reason
+- [x] `MODEL_DEFAULTS` renamed public for cross-module access
+
+### v5.5.0 — Persistent File Logging
+- [x] `logs/app.log` written in append mode alongside existing console output
+- [x] `logs/` directory auto-created at startup via `Path("logs").mkdir(exist_ok=True)`
+- [x] Explicit `handlers=[StreamHandler, FileHandler]` in `basicConfig`
+
 ---
 
 ## 🔄 In Progress
@@ -33,22 +66,9 @@
 
 ## 📋 Planned — Near Term
 
-### v5.2.0 — Post-Repair Re-Validation Loop
-**Priority:** High
-**Why:** `MAX_REPAIR_ATTEMPTS` is already configured (default: 2) but never enforced.
-Repair currently runs at most once, with no verification that it improved the score.
-
-- [ ] Add `repair_attempt_count: int` to `WorkflowState`
-- [ ] After `quality_repair_node`, route back to `quality_validate` if
-      `repair_attempt_count < MAX_REPAIR_ATTEMPTS` and score still below threshold
-- [ ] Add `route_after_repair()` routing function in `graph.py`
-- [ ] Update `CHANGELOG.md` and `PROJECT_BRAIN.md`
-
-**Estimated scope:** 3 files (`state.py`, `nodes.py`, `graph.py`)
-
 ---
 
-### v5.3.0 — Persistent Memory Backend
+### v5.6.0 — Persistent Memory Backend
 **Priority:** High
 **Why:** `content_memory` and `failure_memory` are in-process singletons — they
 do not survive restarts and are not safe for multi-instance deployments.
@@ -66,7 +86,7 @@ do not survive restarts and are not safe for multi-instance deployments.
 
 ---
 
-### v5.4.0 — LangGraph Checkpointing
+### v5.7.0 — LangGraph Checkpointing
 **Priority:** Medium
 **Why:** Enables resume-from-checkpoint for failed runs, per-request state inspection,
 and is a prerequisite for human-in-the-loop interruption.
@@ -82,7 +102,7 @@ strategy before checkpointing is viable.
 
 ---
 
-### v5.5.0 — Parallel Stage Execution
+### v5.8.0 — Parallel Stage Execution
 **Priority:** Low
 **Why:** `experience_node` and `entropy_node` are currently sequential but are
 fully independent — both only require inputs already available after `strategy_node`.
@@ -111,7 +131,7 @@ to approve, reject, or provide feedback before the response is returned.
 - [ ] Feed reviewer feedback into `context_package` feedback field for re-generation
 - [ ] Update response schema with `requires_review: bool` and `thread_id`
 
-**Prerequisite:** v5.4.0 (checkpointing) must be complete first.
+**Prerequisite:** v5.7.0 (checkpointing) must be complete first.
 
 ---
 
@@ -167,8 +187,6 @@ reads it. If `pre_check.passed == False`, the pipeline continues without interve
 | `intent_llm()` / `strategy_llm()` unused | Low | `app/core/llm.py` | Defined; no callers |
 | `pre_check` stored but never acted on | Low | `app/workflows/nodes.py` | Inert state key |
 | `platform_label` / `style_label` dead code | Low | `app/workflows/content_workflow.py:96-97` | Computed but never consumed |
-| `MAX_REPAIR_ATTEMPTS` not enforced | Medium | `app/core/config.py` | Config exists; loop not wired |
 | Memory stores not persistent | High | `app/services/content_memory.py`, `app/context/failure_memory.py` | In-process only |
-| No re-validation after repair | Medium | `app/workflows/graph.py` | Repair may introduce new issues |
 | No exception isolation in `memory_node` | Low | `app/workflows/nodes.py` | Side-effect failure fails the request |
 | `Any` types on state objects | Low | `app/workflows/state.py` | Loses type safety at graph boundary |

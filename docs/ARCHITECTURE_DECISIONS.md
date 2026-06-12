@@ -208,6 +208,110 @@ the existing LLM pool pattern in `app/core/llm.py`.
 
 ---
 
+## ADR-009 — Resilient LLM Provider Chain
+
+**Date:** 2026-05-27
+**Status:** Active
+
+### Context
+The original `llm.py` bound each role to a single provider at startup. An API key
+expiry, quota exhaustion, or temporary network failure would propagate as an unhandled
+exception and terminate the request. The pipeline had no way to recover or degrade
+gracefully. With multiple providers now supported (OpenAI, Gemini), a fallback path
+became viable without significant infrastructure cost.
+
+### Decision
+Replace the single-model pool with `ResilientLLM` — an ordered provider chain that
+tries each provider up to `LLM_RETRY_ATTEMPTS` times before falling through to the next.
+A `_MockProvider` is always appended as the last entry so `.invoke()` never raises,
+regardless of provider availability. Structured log lines emit on every attempt,
+recording provider, attempt number, latency, and failure reason.
+
+Chain assembly happens once per role at first `get_llm()` call (lazy, same timing as before).
+The public API (`intent_llm()`, `generator_llm()`, `repair_llm()`, `repair_llm()`) is preserved;
+return type changes from `BaseChatModel` to `ResilientLLM`, which is duck-compatible at all
+current call sites (`llm.invoke(prompt)` + `response.content`).
+
+### Alternatives considered
+- **Wrap `BaseChatModel` as a subclass** — requires implementing many abstract methods
+  (`_generate`, `_llm_type`, etc.). Not worth the complexity for a thin retry wrapper.
+- **Retry at the call site (in `content_generator.py` / `repair_engine.py`)** — scatters
+  retry logic across multiple files; harder to configure globally.
+- **LangChain `with_retry()` / `with_fallbacks()`** — LangChain provides these as chain
+  operators but they require `LCEL` chain composition. Our callers use `.invoke()` directly,
+  not `|` pipe chains. Adopting LCEL would ripple through every call site.
+- **Tenacity library** — good for retries but doesn't handle the provider-switch fallback
+  without additional wrapper code. Adds a dependency for functionality we can implement
+  in 30 lines.
+
+### Tradeoffs
+- ✅ Pipeline never crashes from an LLM failure — worst case is empty content
+- ✅ Every call emits structured logs: provider, latency, failure type — full observability
+- ✅ Fallback model selection is correct — fallback uses the fallback provider's own
+  `MODEL_DEFAULTS`, not the primary provider's model names
+- ✅ Public API and call sites unchanged — zero diff in agent files
+- ✅ `_MockProvider` is infrastructure-layer safety net, independent of `MOCK_MODE`
+- ❌ `ResilientLLM.invoke()` return type is `Any` — type checker cannot verify `.content`
+  on the result; this was already true for `BaseChatModel.invoke()` at call sites
+- ❌ If all providers fail repeatedly (exhausting retries), the empty mock content
+  will score poorly on all validators — the quality loop will exhaust `MAX_REPAIR_ATTEMPTS`
+  and surface an empty final output. The pipeline completes but the content is not useful.
+- ❌ The mock-provider log message ("all real providers failed") is at ERROR level,
+  which may trigger alerts in production monitoring setups. This is intentional.
+
+---
+
+## ADR-008 — Bounded Quality Repair Loop with Convergence Detection
+
+**Date:** 2026-05-27
+**Status:** Active
+
+### Context
+`MAX_REPAIR_ATTEMPTS` (default: 2) was defined in `config.py` since v5.0.0 but the
+graph had a single `quality_repair → format` edge — repair could only run once regardless
+of the config. Re-validation after repair was therefore impossible: a repair that
+introduced a new quality issue would never be detected.
+
+### Decision
+Change `quality_repair → format` to `quality_repair → quality_validate` so the
+existing conditional edge on `quality_validate` can decide whether to loop or exit.
+Add three loop-control fields to `WorkflowState`:
+
+- `repair_attempt_count` (int) — incremented by `quality_repair_node` each pass
+- `previous_quality_score` (Optional[int]) — score before the most recent repair,
+  stored by `quality_repair_node` for the convergence check
+- `convergence_reached` (bool) — set by `quality_validate_node` when new score ≤ previous
+
+`route_quality()` exits the loop if any of four conditions holds:
+score is acceptable, no failures remain, budget is exhausted, or convergence is detected.
+
+### Alternatives considered
+- **Separate `route_after_repair()` function** — evaluated but redundant; the existing
+  `route_quality` already handles all exit conditions, so funnelling through it from
+  both entry points (first validate + re-validate) is simpler
+- **Loop counter in `route_quality` only** — routing functions cannot modify state
+  in LangGraph, so the counter must live in a node; `quality_repair_node` is the only
+  node that executes exactly once per loop iteration
+- **Convergence in routing function** — routing functions cannot read state keys set
+  by the current node in the same turn; convergence detection must happen inside a node
+  so the result is available to the routing function via the merged state
+
+### Tradeoffs
+- ✅ `MAX_REPAIR_ATTEMPTS` is now fully enforced with zero config changes
+- ✅ Convergence detection prevents infinite loops even if `MAX_REPAIR_ATTEMPTS` is high
+- ✅ Pipeline trace shows per-iteration scores and deltas — full observability
+- ✅ No changes to agent files, schema, or public `run()` interface
+- ✅ Fast path (no repair) is byte-identical to v5.1.0 — skip record parity maintained
+- ❌ `quality_validate_node` is now called N+1 times per request (N = loop iterations)
+  — adds LLM-free deterministic overhead; acceptable for N ≤ 2
+- ❌ Pipeline list rebuilds on every node call — O(N·stages) list copies; negligible
+  for N ≤ 2 but worth noting for very high `MAX_REPAIR_ATTEMPTS` values
+- ❌ Convergence check duplicates the score comparison in `route_quality`
+  (same information expressed in two places); kept because routing functions cannot
+  set state and the flag is needed in the response metadata
+
+---
+
 ## ADR-007 — Separate `context_node` for Stages 3d and 4
 
 **Date:** 2026-05-27

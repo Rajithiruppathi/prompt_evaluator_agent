@@ -34,7 +34,7 @@ from app.services                  import content_memory
 from app.context           import validate_banned
 import app.context.failure_memory as failure_memory
 
-from app.core.config import AUTO_REPAIR_THRESHOLD, HUMANIZATION_REPAIR_THRESHOLD
+from app.core.config import AUTO_REPAIR_THRESHOLD, HUMANIZATION_REPAIR_THRESHOLD, MAX_REPAIR_ATTEMPTS
 
 import logging
 logger = logging.getLogger(__name__)
@@ -312,23 +312,50 @@ def quality_validate_node(state: WorkflowState) -> dict:
         "tone":     state.get("tone"),
     }
     validation = validate(state["working_content"], validation_ctx)
+
+    repair_attempt_count = state.get("repair_attempt_count", 0)
+    previous_score       = state.get("previous_quality_score")
+
+    # Convergence: repair ran but the score did not improve — stop the loop.
+    convergence_reached = False
+    if repair_attempt_count > 0 and previous_score is not None:
+        if validation.score <= previous_score:
+            convergence_reached = True
+            logger.info(
+                f"Stage 6 | convergence detected | score={validation.score} "
+                f"previous={previous_score} — repair did not improve quality, stopping loop"
+            )
+
+    # Build detail suffix for re-validation passes (loop iterations 1+)
+    loop_suffix = ""
+    if repair_attempt_count > 0:
+        delta      = validation.score - (previous_score or 0)
+        sign       = "+" if delta >= 0 else ""
+        loop_suffix = (
+            f" | Re-validation {repair_attempt_count}/{MAX_REPAIR_ATTEMPTS}"
+            f" | delta={sign}{delta}"
+        )
+        if convergence_reached:
+            loop_suffix += " | CONVERGED"
+
     stage_validate = _stage(
         "validator",
         "completed",
         f"Quality score: {validation.score}/100 ({validation.grade}) | "
-        f"Failures: {len(validation.failures)} | Warnings: {len(validation.warnings)}",
+        f"Failures: {len(validation.failures)} | Warnings: {len(validation.warnings)}{loop_suffix}",
     )
     logger.info(
         f"Stage 6 | score={validation.score} | grade={validation.grade} | "
-        f"failures={len(validation.failures)}"
+        f"failures={len(validation.failures)} | repair_attempts_so_far={repair_attempt_count}"
     )
 
     new_pipeline = [*state.get("pipeline", []), stage_validate]
 
-    # When repair will NOT run, record the skip now so the pipeline trace is
-    # identical to the original sequential workflow.
+    # Append skip record ONLY on the first validate pass when repair is bypassed
+    # entirely (backwards compat). On re-validation passes the repair records are
+    # already in the pipeline, so no skip record is needed.
     needs_repair = validation.score < AUTO_REPAIR_THRESHOLD and bool(validation.failures)
-    if not needs_repair:
+    if not needs_repair and repair_attempt_count == 0:
         skip_reason = (
             f"Score {validation.score} >= threshold {AUTO_REPAIR_THRESHOLD}"
             if validation.score >= AUTO_REPAIR_THRESHOLD
@@ -339,8 +366,9 @@ def quality_validate_node(state: WorkflowState) -> dict:
         logger.info(f"Stage 7 | skipped | {skip_reason}")
 
     return {
-        "validation": validation,
-        "pipeline":   new_pipeline,
+        "validation":          validation,
+        "convergence_reached": convergence_reached,
+        "pipeline":            new_pipeline,
     }
 
 
@@ -349,30 +377,53 @@ def quality_validate_node(state: WorkflowState) -> dict:
 # ---------------------------------------------------------------------------
 
 def quality_repair_node(state: WorkflowState) -> dict:
-    strategy         = state["strategy"]
-    audience_context = state["audience_context"]
-    validation       = state["validation"]
-    validation_ctx   = {
+    strategy             = state["strategy"]
+    audience_context     = state["audience_context"]
+    validation           = state["validation"]
+    previous_score       = validation.score                           # score before this attempt
+    repair_attempt_count = state.get("repair_attempt_count", 0) + 1  # increment
+
+    validation_ctx = {
         "use_case": state["use_case"],
         "platform": strategy["platform"],
         "audience": audience_context["profile"],
         "tone":     state.get("tone"),
     }
+    logger.info(
+        f"Stage 7 | repair attempt {repair_attempt_count}/{MAX_REPAIR_ATTEMPTS} "
+        f"| score_before={previous_score} | failures={len(validation.failures)}"
+    )
+
     final, quality_repaired = repair(state["working_content"], validation, validation_ctx)
+
     if quality_repaired:
         stage = _stage(
             "repair_engine",
             "completed",
-            f"Repaired {len(validation.failures)} issue(s) — deterministic + LLM surgical fixes applied",
+            f"Repair attempt {repair_attempt_count}/{MAX_REPAIR_ATTEMPTS} | "
+            f"Score before: {previous_score} | "
+            f"Fixed {len(validation.failures)} issue(s) — deterministic + LLM surgical fixes",
         )
-        logger.info("Stage 7 | quality repair applied")
+        logger.info(
+            f"Stage 7 | repair applied | attempt={repair_attempt_count} "
+            f"| score_before={previous_score}"
+        )
     else:
-        stage = _stage("repair_engine", "skipped", "No auto-repairable issues found in this pass")
+        stage = _stage(
+            "repair_engine",
+            "skipped",
+            f"Repair attempt {repair_attempt_count}/{MAX_REPAIR_ATTEMPTS} | "
+            f"No auto-repairable issues found in this pass",
+        )
+        logger.info(f"Stage 7 | no changes made | attempt={repair_attempt_count}")
 
     return {
-        "final":           final,
-        "quality_repaired": quality_repaired,
-        "pipeline":         [*state.get("pipeline", []), stage],
+        "working_content":       final,   # updated so quality_validate re-validates new content
+        "final":                 final,   # format_node reads this after loop exits
+        "quality_repaired":      quality_repaired,
+        "repair_attempt_count":  repair_attempt_count,
+        "previous_quality_score": previous_score,
+        "pipeline":              [*state.get("pipeline", []), stage],
     }
 
 

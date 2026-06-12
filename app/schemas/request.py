@@ -12,6 +12,7 @@ class ContentRequest(BaseModel):
     prompt: str = Field(
         ...,
         min_length=3,
+        max_length=4000,
         description=(
             "The topic to write about, existing content to improve, "
             "or a prompt to optimize. Context determines how it's interpreted."
@@ -59,6 +60,7 @@ class ContentRequest(BaseModel):
     # For improvement / rewrite / convert modes
     existing_content: Optional[str] = Field(
         default=None,
+        max_length=10000,
         description="Existing content when intent is 'improve', 'rewrite', or 'convert'.",
     )
     target_use_case: Optional[str] = Field(

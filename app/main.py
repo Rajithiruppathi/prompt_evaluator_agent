@@ -6,13 +6,24 @@ Start with: uvicorn app.main:app --reload
 """
 
 import logging
+from pathlib import Path
 from fastapi import FastAPI
 from app.api.routes import router
 
+_LOG_DIR = Path(__file__).parent.parent / "logs"
+_LOG_DIR.mkdir(exist_ok=True)
+
+_LOG_FORMAT = "%(asctime)s | %(levelname)-8s | %(name)s | %(message)s"
+_LOG_DATE   = "%H:%M:%S"
+
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-    datefmt="%H:%M:%S",
+    format=_LOG_FORMAT,
+    datefmt=_LOG_DATE,
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(str(_LOG_DIR / "app.log"), mode="a"),
+    ],
 )
 
 app = FastAPI(
@@ -59,7 +70,7 @@ def root():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": "4.0.0"}
+    return {"status": "ok", "version": "4.1.0"}
 
 
 app.include_router(router)

@@ -64,5 +64,10 @@ class WorkflowState(TypedDict, total=False):
     quality_repaired: bool
     final:            str              # working_content after optional quality repair
 
+    # ── Quality Repair Loop (Phase 2) ─────────────────────────────────────────
+    repair_attempt_count:   int          # number of quality_repair_node executions so far
+    previous_quality_score: Optional[int]  # score before last repair (convergence check)
+    convergence_reached:    bool         # True when repair did not improve the score
+
     # ── Pipeline trace (cumulative) ───────────────────────────────────────────
     pipeline: list                     # list[PipelineStage] — appended by every node

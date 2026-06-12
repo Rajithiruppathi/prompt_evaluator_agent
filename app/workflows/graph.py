@@ -24,7 +24,7 @@ from app.workflows.nodes import (
     format_node,
     memory_node,
 )
-from app.core.config import AUTO_REPAIR_THRESHOLD, HUMANIZATION_REPAIR_THRESHOLD
+from app.core.config import AUTO_REPAIR_THRESHOLD, HUMANIZATION_REPAIR_THRESHOLD, MAX_REPAIR_ATTEMPTS
 
 
 # ---------------------------------------------------------------------------
@@ -39,11 +39,28 @@ def route_humanization(state: WorkflowState) -> str:
 
 
 def route_quality(state: WorkflowState) -> str:
-    """After Stage 6: branch to repair if quality score is below threshold and failures exist."""
-    v = state["validation"]
-    if v.score < AUTO_REPAIR_THRESHOLD and v.failures:
-        return "quality_repair"
-    return "format"
+    """After Stage 6: exit to format or loop back to quality_repair.
+
+    Exit conditions (any one is sufficient):
+      - score >= AUTO_REPAIR_THRESHOLD    (quality is acceptable)
+      - no failures remain                (nothing left to fix)
+      - repair_attempt_count >= MAX_REPAIR_ATTEMPTS  (budget exhausted)
+      - convergence_reached               (repair did not improve the score)
+    """
+    v            = state["validation"]  # type: ignore[typeddict-item]
+    repair_count = state.get("repair_attempt_count", 0)
+    convergence  = state.get("convergence_reached", False)
+
+    if v.score >= AUTO_REPAIR_THRESHOLD:
+        return "format"
+    if not v.failures:
+        return "format"
+    if repair_count >= MAX_REPAIR_ATTEMPTS:
+        return "format"
+    if convergence:
+        return "format"
+
+    return "quality_repair"
 
 
 # ---------------------------------------------------------------------------
@@ -99,7 +116,7 @@ def build_graph():
             "format":         "format",
         },
     )
-    g.add_edge("quality_repair", "format")
+    g.add_edge("quality_repair", "quality_validate")  # loop: re-validate after each repair
 
     g.add_edge("format",  "memory")
     g.add_edge("memory",  END)

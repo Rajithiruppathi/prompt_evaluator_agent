@@ -1,7 +1,12 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
+
+# ---------------------------------------------------------------------------
+# Mock Mode — disables all LLM calls for local dev / testing without API keys
+# ---------------------------------------------------------------------------
+MOCK_MODE = os.getenv("MOCK_MODE", "false").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # Provider Selection
@@ -11,10 +16,22 @@ load_dotenv()
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai").lower()
 
 # ---------------------------------------------------------------------------
+# Provider Fallback
+# ---------------------------------------------------------------------------
+# Optional second provider tried when the primary fails all retries.
+# Leave empty to disable. Example: if LLM_PROVIDER=openai, set to gemini.
+FALLBACK_PROVIDER = os.getenv("FALLBACK_PROVIDER", "").lower()
+
+# How many times to attempt each provider before falling back to the next one.
+# 1 = single attempt (no retry). 2 = one retry. Default: 1.
+LLM_RETRY_ATTEMPTS = int(os.getenv("LLM_RETRY_ATTEMPTS", "1"))
+
+# ---------------------------------------------------------------------------
 # Per-provider model name defaults
 # Individual model env vars always override these defaults.
+# MODEL_DEFAULTS is public so llm.py can look up fallback-provider defaults.
 # ---------------------------------------------------------------------------
-_MODEL_DEFAULTS: dict[str, dict[str, str]] = {
+MODEL_DEFAULTS: dict[str, dict[str, str]] = {
     "openai": {
         "intent":    "gpt-4o-mini",
         "strategy":  "gpt-4o-mini",
@@ -29,7 +46,7 @@ _MODEL_DEFAULTS: dict[str, dict[str, str]] = {
     },
 }
 
-_defaults = _MODEL_DEFAULTS.get(LLM_PROVIDER, _MODEL_DEFAULTS["openai"])
+_defaults = MODEL_DEFAULTS.get(LLM_PROVIDER, MODEL_DEFAULTS["openai"])
 
 # ---------------------------------------------------------------------------
 # LLM Model Selection — each stage can use a different model
